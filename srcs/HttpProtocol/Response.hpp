@@ -10,8 +10,15 @@ class HttpResponse{
         std::string ContentType;
         std::string Connection;
         std::vector<char> Body;
+        std::string Uri;
+        std::string Method;
+        std::string BodyFile;
     public :
-        HttpResponse() : Version("HTTP/1.1"), ResponseCode("200 OK"), ContentType("text/html"), Connection("close"){}
+        HttpResponse(std::string Uri, std::string Method, std::string BodyFile) : Version("HTTP/1.1"), ResponseCode("200 OK"), ContentType("text/html"), Connection("close"){
+            this->Uri = Uri;
+            this->Method = Method;
+            this->BodyFile = BodyFile;
+        }
         void SetVersion(std::string value);
         void SetResponseCode(std::string value);
         void SetContentType(std::string value);

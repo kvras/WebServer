@@ -37,7 +37,7 @@ int WebServ::handleExistedConnection(struct kevent* current)
 
     if(req->isDone == true) {
         std::cerr << "-->" << req->total_read_bytes << "--" << req->content_length << '\n';
-
+        HttpResponse* res = new HttpResponse(req->uri, req->method, req->bodyFile);
         // std::cout << "<_________________Parsed Request__________>" << std::endl;
         // std::cout << *req << std::endl;
         // req->PerformChecks();

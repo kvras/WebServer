@@ -14,6 +14,7 @@
 #include "../server/Server.hpp"
 #include "../CGI/CGI.hpp"
 #include "../HttpProtocol/Request.hpp"
+#include "../HttpProtocol/Response.hpp"
 
 #ifndef M_DEBUG
 # define M_DEBUG 1
