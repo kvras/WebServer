@@ -5,8 +5,7 @@ struct kevent KQueue::m_keventBuff;
 
 void KQueue::setFdNonBlock(int fd)
 {
-    int oldFlags = fcntl(fd, F_GETFL);
-    fcntl(fd, F_SETFL, oldFlags | O_NONBLOCK);
+    fcntl(fd, F_SETFL, O_NONBLOCK);
 }
 
 int KQueue::createKq()

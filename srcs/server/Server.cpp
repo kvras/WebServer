@@ -21,13 +21,12 @@ void Server::init()
 
 	int opt = 1;
 	std::memset(m_sockAddress.sin_zero, 0, 8 * sizeof(unsigned char));
-	// m_sockAddress.sin_port = htons(std::stoi(directives["listen"].values[0]));
-	m_sockAddress.sin_port = htons(stoi(directives["listen"].values[0]));
+
+	m_sockAddress.sin_port = htons(std::stoi(directives["listen"].values[0]));
 	m_sockAddress.sin_family = AF_INET;
 
 	m_sockLen = sizeof(m_sockAddress);
 
-	// if (inet_pton(AF_INET, directives["host"].values[0].c_str(), &m_sockAddress.sin_addr.s_addr) == 0) 
 	if (inet_pton(AF_INET, directives["host"].values[0].c_str(), &m_sockAddress.sin_addr.s_addr) == 0) 
 		throw std::runtime_error("invalide Ip address");
 
@@ -35,8 +34,6 @@ void Server::init()
 	if (setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
 		throw std::runtime_error((std::string("setsockopt(2): ") + strerror(errno)));
 
-	// int f = fcntl(m_socket, F_GETFL);
-	// fcntl(m_socket, F_SETFL, f | O_NONBLOCK);
     KQueue::setFdNonBlock(m_socket);
 
 	if (bind(m_socket, (sockaddr*) &m_sockAddress, m_sockLen) == -1)

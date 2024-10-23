@@ -48,8 +48,9 @@ const std::vector<char>& HttpResponse::GetBody(){
 }
 
 
-std::string WhatContentType(std::string uri){
-
+std::string WhatContentType(std::string uri) {
+    
+    // Use Switch case here
     if ( uri.rfind(".") == std::string::npos|| uri.substr(uri.rfind(".")) == ".html" || uri == "/")
         return "text/html";
     else if (uri.substr(uri.rfind(".")) == ".css")
