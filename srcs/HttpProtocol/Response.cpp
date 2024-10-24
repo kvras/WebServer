@@ -81,3 +81,29 @@ std::string WhatContentType(std::string uri){
     else
         return "application/octet-stream";
 }
+
+int HttpResponse::responseCGI(HttpRequest *req)
+{
+    const char* cgiPath = "/Users/ijaija/web-server/www/server-cgis/php-cgi";
+    const char* cgi = "php";
+    const char* file = "/Users/ijaija/web-server/srcs/CGI/test.php";
+    const char* argv[3];
+    argv[0] = cgi;
+    argv[1] = file;
+    argv[2] = NULL;
+
+    std::string buff;
+
+    std::string postData = "var1=5454&var2=test&path=sds";
+
+    int fd = CGI::runScript("POST", cgiPath, argv, postData);
+
+    std::cout << buff << std::endl;
+    return fd;
+}
+
+int HttpResponse::responseFile(HttpRequest &req)
+{
+    int fd = open(req.uri.substr(1).c_str(), O_RDONLY);
+    return fd;
+}

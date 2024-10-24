@@ -30,40 +30,24 @@ int WebServ::handleNewConnection(struct kevent* current)
 
 int WebServ::handleExistedConnection(struct kevent* current)
 {
-    // Read and Parse Request
     HttpRequest* req = (HttpRequest*) ((t_eventData*)current->udata)->data;
-
+    int fd;
     req->readRequest(current->ident);
+    if (req->isDone == true)
+    {
+        if (req->uri.substr(req->uri.size() - 4) == ".php" || req->uri.substr(req->uri.size() - 3) == ".py")
+           fd = HttpResponse::responseCGI(req);
+        else
+           fd = HttpResponse::responseFile(*req);
 
-    if(req->isDone == true) {
-        std::cerr << "-->" << req->total_read_bytes << "--" << req->content_length << '\n';
-        HttpResponse* res = new HttpResponse(req->uri, req->method, req->bodyFile);
-        // std::cout << "<_________________Parsed Request__________>" << std::endl;
-        // std::cout << *req << std::endl;
-        // req->PerformChecks();
-        std::string response = "HTTP/1.1 201 Created\r\n";
-        response += "Content-Type: text/html\r\n";
-        response += "Content-Length: 0\r\n";
-        response += "\r\n";
-        send(current->ident, response.c_str(), response.size(), 0);
+        HttpResponse *res = new HttpResponse(fd, current->ident,req->uri, req->method, req->bodyFile);
+        KQueue::watchFd(fd, new t_eventData("response fd", res));
+        m_openedSockets++;
         delete req;
         delete (t_eventData*)current->udata;
         KQueue::removeFd(current->ident);
-        std::cerr << "Closing connection..\n";
-        close(current->ident);
-        return 1;
+        m_openedSockets--;
     }
-
-    // Pass to CGI
-    // const char* argv[3] = {"php-cgi", "/Users/ijaija/web-server/srcs/CGI/test.php", NULL};
-    // std::string postBody ("var1=5454&var2=test&path=sds");
-    // CGI::runScript(
-    //     POST,
-    //     "/Users/ijaija/web-server/www/server-cgis/php-cgi",
-    //     argv,
-    //     postBody, current->ident);
-    // m_openedSockets++;
-
 	return 0;
 }
 
@@ -126,3 +110,5 @@ void WebServ::run()
         //     std::perror("waitpid(2)");
     }
 }
+
+

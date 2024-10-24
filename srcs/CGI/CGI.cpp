@@ -38,7 +38,7 @@ static void closePipe(int fds[2])
     close(fds[1]);
 }
 
-void CGI::runScript(t_method reqMethod, const char* cgiPath, const char* argv[], std::string& postData, long fd)
+int CGI::runScript(t_method reqMethod, const char* cgiPath, const char* argv[], std::string& postData, long fd)
 {
     int fds[2];
     if (pipe(fds) == -1) {
@@ -82,7 +82,7 @@ void CGI::runScript(t_method reqMethod, const char* cgiPath, const char* argv[],
         if (pid == -1) {
             if (M_DEBUG)
                 perror("fork(2)");
-            return (closePipe(fds)); // No response
+            return (closePipe(fds), -1); // No response
         }
 
         write(input_pipe[1], postData.c_str(), postData.length());
@@ -97,10 +97,10 @@ void CGI::runScript(t_method reqMethod, const char* cgiPath, const char* argv[],
 
         
         close(fds[1]);
-        KQueue::setFdNonBlock(fds[0]);
-        KQueue::watchFd(fds[0], (t_eventData*)fd);
+        // KQueue::setFdNonBlock(fds[0]);
+        // KQueue::watchFd(fds[0], (t_eventData*)fd);
         // fds[0] will be closed by KQueue::removeFd()
-        
+        return fds[0];
     }
 }
 
