@@ -289,3 +289,8 @@ void HttpRequest::readRequest(int fd) {
         }
     }
 }
+
+std::string HttpRequest::getHeader(std::string key)
+{
+    return headers[key];
+}

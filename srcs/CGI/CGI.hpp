@@ -3,7 +3,9 @@
 #include <iostream>
 #include <unistd.h>
 #include "../KQueue/KQueue.hpp"
+#include "../HttpProtocol/Request.hpp"
 
+class HttpRequest;
 #ifndef M_DEBUG
 # define M_DEBUG 1
 #endif
@@ -34,7 +36,7 @@ public:
         setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
         setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
         setenv("REQUEST_METHOD", req->method.c_str(), 1);
-        setenv("SCRIPT_NAME", req->uri.c_str(), 1);
+        setenv("SCRIPT_NAME", req->uri.c_str()+1, 1);
         setenv("SCRIPT_FILENAME", req->uri.c_str(), 1);
         
         // Set query string if present
@@ -47,25 +49,20 @@ public:
 
         // Set content information for POST requests
         if (req->method == "POST") {
-            auto contentLength = std::to_string(req->contentLength);
-            setenv("CONTENT_LENGTH", contentLength.c_str(), 1);
-            
-            auto it = req->headers.find("Content-Type");
-            if (it != req->headers.end()) {
-                setenv("CONTENT_TYPE", it->second.c_str(), 1);
+            setenv("CONTENT_LENGTH", std::to_string(req->content_length).c_str(), 1);
+            setenv("CONTENT_TYPE", req->getHeader("Content-Type").c_str(), 1);
             }
-        }
-    }
+        };
 
-    static int responseCGI(HttpRequest* req) 
+    static int responseCGI(HttpRequest* req, int BodyFd)
     {
         int pipe_in[2];  // For writing to CGI process
         int pipe_out[2]; // For reading from CGI process
-        
         if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {
             throw std::runtime_error("Failed to create pipes");
         }
 
+       dup2(BodyFd, pipe_in[0]);
         pid_t pid = fork();
         if (pid < 0) {
             close(pipe_in[0]); close(pipe_in[1]);
@@ -99,10 +96,10 @@ public:
                 // Determine which interpreter to use
                 std::string interpreter;
                 std::string scriptPath = req->uri;
-                if (scriptPath.ends_with(".php")) {
-                    interpreter = "/usr/bin/php-cgi";  // Adjust path as needed
-                } else if (scriptPath.ends_with(".py")) {
-                    interpreter = "/usr/bin/python3";  // Adjust path as needed
+                if (scriptPath.substr(scriptPath.find_last_of(".")) == ".php") {
+                    interpreter = "./bin/php-cgi";  // Adjust path as needed
+                } else if (scriptPath.substr(scriptPath.find_last_of(".")) == ".py") {
+                    interpreter = "./bin/python-cgi";  // Adjust path as needed
                 } else {
                     throw std::runtime_error("Unsupported CGI type");
                 }
