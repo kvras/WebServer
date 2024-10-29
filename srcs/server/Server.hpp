@@ -40,8 +40,3 @@ private:
     int m_socket;
 
 };
-
-
-
-/*          Server        */
-void    server();

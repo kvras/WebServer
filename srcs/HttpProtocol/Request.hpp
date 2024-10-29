@@ -24,7 +24,7 @@ public:
     HttpRequest();
     void readRequest(int fd);
     void performChecks(void);
-    void parseRequest(char *request, size_t size);
+    void parseRequest(const std::string& line);
     void parseFirstLine(std::string line);
     void parseHeaders(std::string line);
     void parseBody(char *line, size_t size);
@@ -33,9 +33,9 @@ public:
     bool isDone;
     long content_length;
     long total_read_bytes;
+
+
     std::string method ,uri, version, boundary, bodyFile;
-    std::string getHeader(std::string key);
-private:
     double chunk_size, bodyRead;
     std::map<std::string, std::string> headers;
     std::vector<char> partial_data;
@@ -44,6 +44,9 @@ private:
     long long chunkPos;
     std::string TransferEncoding;
     bool skipNextLine;
+    std::string getHeader(const std::string& key){
+        return headers[key];
+    };
 
 };
 

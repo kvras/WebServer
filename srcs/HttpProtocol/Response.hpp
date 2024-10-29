@@ -2,41 +2,40 @@
 
 #include <iostream>
 #include <vector>
-#include "Request.hpp"
-#include <sys/types.h>
-#include <sys/event.h>
-#include <sys/time.h>
+#include <fstream>
 #include <unistd.h>
-#include <fcntl.h>
+#include <sys/socket.h>
 #include <string>
-#include "../CGI/CGI.hpp"
-class HttpRequest;
+#include <sstream>
+
+#ifndef M_DEBUG
+# define M_DEBUG 1
+#endif
+
 class HttpResponse{
-    private :
+    public :
         std::string Version;
         std::string ResponseCode;
         std::string ContentType;
         std::string Connection;
         std::vector<char> Body;
-        std::string Uri;
-        std::string Method;
-        std::string BodyFile;
-        int fd;
-        int clientFd;
-    public :
-        bool ResponseDelivred;
-        HttpResponse(int fd, int clientFd, std::string uri, std::string method, std::string bodyFile){
-            this->Uri = uri;
-            this->Method = method;
-            this->BodyFile = bodyFile;
-            this->ResponseDelivred = false;
+        int clientSocket;
+        int responseFd;
+        bool ended;
+
+
+        HttpResponse(int clientSocket, int fd, std::string ContentType) : Version("HTTP/1.1"), ResponseCode("200 OK"), ContentType(ContentType), Connection("close"), clientSocket(clientSocket), responseFd(fd), ended(false) {
+            std::cerr << "tconstructa\n";
+            std::string headers = "HTTP/1.1 200\r\nContent-Type: " + ContentType + "\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n";
+            send(clientSocket, headers.c_str(), headers.size(), 0);
         }
+        ~HttpResponse() {close(responseFd);}
+        void sendingResponse();
         void SetVersion(std::string value);
         void SetResponseCode(std::string value);
         void SetContentType(std::string value);
         void SetConnection(std::string value);
         void SetBody(std::vector<char> Body);
-        // void DeliveringResponse(std::string& uri, std::string& method, std::string& bodyFile);
 
         std::string GetVersion();
         std::string GetResponseCode();
@@ -44,8 +43,6 @@ class HttpResponse{
         std::string GetConnection();
         const std::vector<char>& GetBody();
         const std::vector<char> BuildResponse();
-        static int responseCGI(HttpRequest *req);
-        static int responseFile(HttpRequest &req);
 
 };
 

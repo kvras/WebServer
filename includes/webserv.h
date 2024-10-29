@@ -7,3 +7,5 @@
 #include "../srcs/main/WebServ.hpp"
 #include "../srcs/configFile/Directive.hpp"
 #include "../srcs/configFile/Location.hpp"
+#include "../srcs/Methods/Methods.hpp"
+

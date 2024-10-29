@@ -1,12 +1,5 @@
 #include "WebServ.hpp"
 
-WebServ::WebServ()
-    : m_cEventData("client socket", NULL)
-    , m_openedSockets (0)
-{
-}
-
-// returns -1 if kevent failed
 int WebServ::handleNewConnection(struct kevent* current)
 {
     t_eventData *serverEvData = (t_eventData*)current->udata;
@@ -17,54 +10,83 @@ int WebServ::handleNewConnection(struct kevent* current)
         perror("accept(2)");
 
 
-	// int flags = fcntl(clientSock, F_GETFL);
-	// fcntl(clientSock, F_SETFL, flags | O_NONBLOCK);
     KQueue::setFdNonBlock(clientSock);
 
     HttpRequest *req = new HttpRequest();
     t_eventData *clientEvData = new t_eventData("client socket", req);
 
-	KQueue::watchFd(clientSock, clientEvData);
+	KQueue::watchState(clientSock, clientEvData, EVFILT_READ);
 	return 0;
 }
 
 int WebServ::handleExistedConnection(struct kevent* current)
 {
+    // Read and Parse Request
     HttpRequest* req = (HttpRequest*) ((t_eventData*)current->udata)->data;
-    int fd;
-    req->readRequest(current->ident);
-    if (req->isDone == true)
-    {
-        if (req->uri.substr(req->uri.size() - 4) == ".php" || req->uri.substr(req->uri.size() - 3) == ".py")
-           fd = HttpResponse::responseCGI(req);
-        else
-           fd = HttpResponse::responseFile(*req);
 
-        HttpResponse *res = new HttpResponse(fd, current->ident,req->uri, req->method, req->bodyFile);
-        KQueue::watchFd(fd, new t_eventData("response fd", res));
-        m_openedSockets++;
+    req->readRequest(current->ident);
+
+    if(req->isDone == true) {
+        int fd;
+        int body_fd;
+        KQueue::removeWatch(current->ident, EVFILT_READ);
+
+        // Open something (file or pipe) and pass it to response
+        std::cout << "\033[1;31m" << req->uri.c_str()+1 << "\033[0m" << std::endl;
+        std::string extension = req->uri.substr(req->uri.find_last_of("."));
+        if (extension == ".php" || extension == ".py")
+        {
+            std::cout << "\033[1;31m" << req->bodyFile << "\033[0m" << std::endl;
+            if (req->bodyFile.empty())
+                body_fd = 0;
+            else
+                body_fd = open(req->bodyFile.c_str(), O_RDONLY);
+            if (body_fd < 0)
+                perror("Error opening body file");
+            fd = CGI::responseCGI(req, body_fd);
+           
+        }
+        else
+            fd = open(req->uri.c_str()+1, O_RDONLY);
+        if (fd <= 0)
+            perror("open(2)");
+
+        KQueue::setFdNonBlock(fd);
+		
+        M_DEBUG && std::cerr << "Request parsed and passed to execution\n" ;
+        KQueue::watchState(fd, new t_eventData("response ready", (void*)new HttpResponse(current->ident, fd, WhatContentType(req->uri))), EVFILT_READ);
+        
         delete req;
         delete (t_eventData*)current->udata;
-        KQueue::removeFd(current->ident);
-        m_openedSockets--;
+
+        return 0;
     }
 	return 0;
 }
 
+void WebServ::switchToSending(struct kevent* current)
+{
+    t_eventData* evData = (t_eventData*) current->udata;
+    evData->type = "send response";
+
+    std::cerr << ((HttpResponse*)evData->data)->clientSocket;
+
+    KQueue::removeWatch(current->ident, EVFILT_READ);
+    KQueue::watchState(((HttpResponse*)evData->data)->clientSocket, evData, EVFILT_WRITE);
+}
+
 void WebServ::sendResponse(struct kevent* current)
 {
-    std::string content;
+    t_eventData* evData = (t_eventData*) current->udata;
+    HttpResponse *res = (HttpResponse*)evData->data;
 
-    CGI::readOutput(current->ident, content);
+    res->sendingResponse();
 
-
-	std::string response = "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " + std::to_string(content.length()) + "\n\n" + content;
-
-    if (send((long)current->udata, response.c_str(), response.size(), 0) == -1) {
-		(M_DEBUG) && std::cerr << "error while sending response: " << strerror(errno) << '\n' ;
-	}
-
-    close((long)current->udata);
+    if (res->ended) {
+        KQueue::removeWatch(current->ident, EVFILT_WRITE);
+        delete res;
+        delete evData;
+    }
 }
 
 void WebServ::run()
@@ -91,24 +113,24 @@ void WebServ::run()
 
         for (int i = 0; i < nevents; i++) {
 
-            if ((long)events[i].udata > OPEN_MAX && !std::strcmp((static_cast<t_eventData*>(events[i].udata))->type, "server socket")) {
+            if (!std::strcmp((static_cast<t_eventData*>(events[i].udata))->type, "server socket")) {
 
                 handleNewConnection(&events[i]);
                 m_openedSockets++;
 				std::cout << "Connection accepted" << std::endl ;
             }
-            else if ((long)events[i].udata > OPEN_MAX && !std::strcmp(static_cast<t_eventData*>(events[i].udata)->type, "client socket")) {
+            else if (!std::strcmp(static_cast<t_eventData*>(events[i].udata)->type, "client socket")) {
 				handleExistedConnection(&events[i]);
-				// std::cout << "Request parsed" << std::endl ;
             }
-            // else {
-            //     sendResponse(&events[i]);
-			// 	std::cout << "Response sent" << std::endl ;
-            // }
+            else if (!std::strcmp(static_cast<t_eventData*>(events[i].udata)->type, "response ready")) {
+                switchToSending(&events[i]);
+            }
+            else if (!std::strcmp(static_cast<t_eventData*>(events[i].udata)->type, "send response")) {
+                sendResponse(&events[i]);
+            }
+
         }
         // if (waitpid(-1, NULL, WNOHANG) == -1)
         //     std::perror("waitpid(2)");
     }
 }
-
-

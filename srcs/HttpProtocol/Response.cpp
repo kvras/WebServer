@@ -48,9 +48,11 @@ const std::vector<char>& HttpResponse::GetBody(){
 }
 
 
-std::string WhatContentType(std::string uri){
-
-    if ( uri.rfind(".") == std::string::npos|| uri.substr(uri.rfind(".")) == ".html" || uri == "/")
+std::string WhatContentType(std::string uri) {
+    
+    // Use Switch case here
+    if ( uri.rfind(".") == std::string::npos|| uri.substr(uri.rfind(".")) == ".html" || uri == "/" ||
+     uri.substr(uri.rfind(".")) == ".php" || uri.substr(uri.rfind(".")) == ".py")
         return "text/html";
     else if (uri.substr(uri.rfind(".")) == ".css")
         return "text/css";
@@ -82,28 +84,34 @@ std::string WhatContentType(std::string uri){
         return "application/octet-stream";
 }
 
-int HttpResponse::responseCGI(HttpRequest *req)
-{
-    const char* cgiPath = "/Users/ijaija/web-server/www/server-cgis/php-cgi";
-    const char* cgi = "php";
-    const char* file = "/Users/ijaija/web-server/srcs/CGI/test.php";
-    const char* argv[3];
-    argv[0] = cgi;
-    argv[1] = file;
-    argv[2] = NULL;
+void HttpResponse::sendingResponse() {
+    int buffSize = 50000;
+    char buff[buffSize];
 
-    std::string buff;
+    int r = read(responseFd, buff, buffSize - 1);
+    if (r == -1)
+        return;
 
-    std::string postData = "var1=5454&var2=test&path=sds";
+    if (r == 0) {
+        send(clientSocket, "0\r\n\r\n", 5, 0);
+        close(clientSocket);
+        ended = true;
+        std::cerr << "The connection is ended and closed\n";
+        return;
+    }
 
-    int fd = CGI::runScript("POST", cgiPath, argv, postData);
+    buff[r] = '\0';
 
-    std::cout << buff << std::endl;
-    return fd;
-}
+    std::stringstream tmp;
+    tmp << std::hex << r;
+    std::string chunkLenHex = tmp.str() + "\r\n";
 
-int HttpResponse::responseFile(HttpRequest &req)
-{
-    int fd = open(req.uri.substr(1).c_str(), O_RDONLY);
-    return fd;
+
+    std::string fullMessage = chunkLenHex + std::string(buff, r) + "\r\n";
+
+
+    if (send(clientSocket, fullMessage.c_str(), fullMessage.size(), 0) == -1) {
+        if (M_DEBUG) perror("send(5)");
+        return;
+    }
 }

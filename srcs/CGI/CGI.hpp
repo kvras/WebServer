@@ -16,53 +16,67 @@ class HttpRequest;
 
 #define NOCHILD -2
 
-typedef enum request_method {
-    POST,
-    GET,
-    DELETE
-} t_method;
-
-class CGI
-{
-
-public:
-    static int runScript(t_method reqMethod, const char* cgiPath, const char* argv[], std::string& postData, long fd);
-    static void readOutput(int fd, std::string& buff);
-
-    static t_eventData m_cgiEventData;
-    static void setupCGIEnvironment(HttpRequest* req) 
-    {
-        // Set required CGI environment variables
-        setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
-        setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
-        setenv("REQUEST_METHOD", req->method.c_str(), 1);
-        setenv("SCRIPT_NAME", req->uri.c_str()+1, 1);
-        setenv("SCRIPT_FILENAME", req->uri.c_str(), 1);
+class CGI {
+private:
+    static char** setupCGIEnvironment(HttpRequest* req) {
+        std::vector<std::string> envVars;
         
-        // Set query string if present
-        size_t queryPos = req->uri.find('?');
+        std::string documentRoot = "/Users/miguiji/Desktop/webserver"; 
+        std::string scriptPath = req->uri;
+        std::string scriptName = req->uri;
+        
+        size_t queryPos = scriptPath.find('?');
         if (queryPos != std::string::npos) {
-            setenv("QUERY_STRING", req->uri.substr(queryPos + 1).c_str(), 1);
+            scriptPath = documentRoot + scriptPath.substr(0, queryPos);
+            scriptName = scriptName.substr(0, queryPos);
+        }
+        else
+            scriptPath = documentRoot + scriptPath;
+
+        envVars.push_back("REDIRECT_STATUS=200");
+        envVars.push_back("GATEWAY_INTERFACE=CGI/1.1");
+        envVars.push_back("SERVER_PROTOCOL=HTTP/1.1");
+        envVars.push_back("SERVER_SOFTWARE=CustomWebServer/1.0");
+        envVars.push_back("SERVER_NAME=localhost");
+        envVars.push_back("SERVER_PORT=8080");
+        envVars.push_back("REQUEST_METHOD=" + req->method);
+        envVars.push_back("SCRIPT_FILENAME=" + scriptPath);
+        envVars.push_back("SCRIPT_NAME=" + scriptName);
+        envVars.push_back("DOCUMENT_ROOT=" + documentRoot);
+        envVars.push_back("PATH_TRANSLATED=" + scriptPath);
+        
+        if (queryPos != std::string::npos) {
+            envVars.push_back("QUERY_STRING=" + req->uri.substr(queryPos + 1));
         } else {
-            setenv("QUERY_STRING", "", 1);
+            envVars.push_back("QUERY_STRING=");
         }
 
-        // Set content information for POST requests
         if (req->method == "POST") {
-            setenv("CONTENT_LENGTH", std::to_string(req->content_length).c_str(), 1);
-            setenv("CONTENT_TYPE", req->getHeader("Content-Type").c_str(), 1);
+            envVars.push_back("CONTENT_LENGTH=" + std::to_string(req->content_length));
+            std::string contentType = req->getHeader("Content-Type");
+            if (!contentType.empty()) {
+                envVars.push_back("CONTENT_TYPE=" + contentType);
             }
-        };
+        }
 
-    static int responseCGI(HttpRequest* req, int BodyFd)
-    {
-        int pipe_in[2];  // For writing to CGI process
-        int pipe_out[2]; // For reading from CGI process
+        char** env = new char*[envVars.size() + 1];
+        for (size_t i = 0; i < envVars.size(); ++i) {
+            env[i] = strdup(envVars[i].c_str());
+        }
+        env[envVars.size()] = nullptr;
+
+        return env;
+    }
+
+public:
+    static int responseCGI(HttpRequest* req, int BodyFd) {
+        int pipe_in[2];
+        int pipe_out[2];
+        
         if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {
             throw std::runtime_error("Failed to create pipes");
         }
 
-       dup2(BodyFd, pipe_in[0]);
         pid_t pid = fork();
         if (pid < 0) {
             close(pipe_in[0]); close(pipe_in[1]);
@@ -70,72 +84,58 @@ public:
             throw std::runtime_error("Fork failed");
         }
 
-        if (pid == 0) { // Child process
+        if (pid == 0) {
             try {
-                // Close unused pipe ends
-                close(pipe_in[1]);  // Close write end of input pipe
-                close(pipe_out[0]); // Close read end of output pipe
+                close(pipe_in[1]);
+                close(pipe_out[0]);
 
-                // Redirect stdin to pipe_in
-                if (dup2(pipe_in[0], STDIN_FILENO) < 0) {
-                    throw std::runtime_error("Failed to redirect stdin");
-                }
+                dup2(pipe_in[0], STDIN_FILENO);
+                dup2(pipe_out[1], STDOUT_FILENO);
 
-                // Redirect stdout to pipe_out
-                if (dup2(pipe_out[1], STDOUT_FILENO) < 0) {
-                    throw std::runtime_error("Failed to redirect stdout");
-                }
-
-                // Close the original file descriptors
                 close(pipe_in[0]);
                 close(pipe_out[1]);
 
-                // Set up CGI environment variables
-                setupCGIEnvironment(req);
+                char** env = setupCGIEnvironment(req);
 
-                // Determine which interpreter to use
-                std::string interpreter;
-                std::string scriptPath = req->uri;
-                if (scriptPath.substr(scriptPath.find_last_of(".")) == ".php") {
-                    interpreter = "./bin/php-cgi";  // Adjust path as needed
-                } else if (scriptPath.substr(scriptPath.find_last_of(".")) == ".py") {
-                    interpreter = "./bin/python-cgi";  // Adjust path as needed
-                } else {
-                    throw std::runtime_error("Unsupported CGI type");
+                std::string documentRoot = "/Users/miguiji/Desktop/webserver";
+                std::string scriptPath = documentRoot + req->uri;
+                size_t queryPos = scriptPath.find('?');
+                if (queryPos != std::string::npos) {
+                    scriptPath = scriptPath.substr(0, queryPos);
                 }
 
-                // Execute the script
                 char* const args[] = {
-                    const_cast<char*>(interpreter.c_str()),
-                    const_cast<char*>(scriptPath.c_str()),
+                    const_cast<char*>("/Users/miguiji/Desktop/webserver/srcs/CGI/bin/php-cgi"),
                     nullptr
                 };
 
-                execv(args[0], args);
-                // If execv returns, it failed
+                execve(args[0], args, env);
+
+                for (int i = 0; env[i] != nullptr; ++i) {
+                    free(env[i]);
+                }
+                delete[] env;
+                
                 throw std::runtime_error("Failed to execute CGI script");
             }
             catch (const std::exception& e) {
-                std::cerr << "CGI error: " << e.what() << std::endl;
                 exit(1);
             }
         }
 
-        // Parent process
-        // Close unused pipe ends
-        close(pipe_in[0]);  // Close read end of input pipe
-        close(pipe_out[1]); // Close write end of output pipe
+        close(pipe_in[0]);
+        close(pipe_out[1]);
 
-        // Write request body to CGI process if POST method
-        if (req->method == "POST" && !req->bodyFile.empty()) {
-            int fd = open(req->bodyFile.c_str(), O_RDONLY);
-            dup2(fd, pipe_in[1]);
+        if (req->method == "POST" && BodyFd != -1) {
+            char buffer[4096];
+            ssize_t bytes_read;
+            while ((bytes_read = read(BodyFd, buffer, sizeof(buffer))) > 0) {
+                write(pipe_in[1], buffer, bytes_read);
+            }
         }
 
-        // Close write pipe as we're done sending data
         close(pipe_in[1]);
 
-        // Return the read end of the output pipe
         return pipe_out[0];
     }
 };

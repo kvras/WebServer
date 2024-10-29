@@ -24,11 +24,16 @@ class   WebServ
 {
 
 public:
-    WebServ();
+    WebServ()
+    : m_cEventData("client socket", NULL)
+    , m_openedSockets (0)
+    {
+    }
     void run();
     int handleNewConnection(struct kevent* current);
     int handleExistedConnection(struct kevent* current);
     void sendResponse(struct kevent* current);
+    void switchToSending(struct kevent* current);
 
 public:
     std::vector<Server> servers;
