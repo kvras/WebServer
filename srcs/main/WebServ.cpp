@@ -34,7 +34,8 @@ int WebServ::handleExistedConnection(struct kevent* current)
         // Open something (file or pipe) and pass it to response
         std::cout << "\033[1;31m" << req->uri.c_str()+1 << "\033[0m" << std::endl;
         std::string extension = req->uri.substr(req->uri.find_last_of("."));
-        if (extension == ".php" || extension == ".py")
+        std::cout << " ext ----> "<< extension << std::endl;
+        if (strcmp(extension.c_str(), ".php") == 0 || strcmp(extension.c_str(), ".py") == 0 || strncmp(extension.c_str(), ".php?", 5) == 0 || strncmp(extension.c_str(), ".py?",5) == 0)
         {
             std::cout << "\033[1;31m" << req->bodyFile << "\033[0m" << std::endl;
             if (req->bodyFile.empty())
