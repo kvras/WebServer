@@ -1,6 +1,31 @@
 
 #include "Methods.hpp"
 
+std::string sessionIdGen(Server &Serv)
+{
+    std::string session_id;
+    std::string elems = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+    srand(time(NULL));
+    while (true)
+    {
+        session_id = "";
+
+        for (int i = 0; i < 20; i++)
+        {
+            session_id += elems[rand() % 62];
+        }
+        if (Serv.session_ids.find(session_id) == Serv.session_ids.end())
+        {
+            Serv.session_ids[session_id] = time(0);
+            break ;
+        }
+    }
+
+    return (session_id);
+    
+}
+
 
 int isDirectory(const std::string& path) {
     struct stat info;
@@ -24,7 +49,7 @@ bool    fileExist(std::string &path)
 }
 
 
-void    listAllfiles(std::string path)
+std::string    listAllfiles(std::string path, Server &Serv)
 {
     std::string file = "<!DOCTYPE html>\n"
                        "<html lang=\"en\">\n"
@@ -105,8 +130,8 @@ void    listAllfiles(std::string path)
     // Open the current directory
     dir = opendir(path.c_str());
     if (dir == NULL) {
-        std::cerr << "Error: Could not open current directory" << std::endl;
-        return ;
+        M_DEBUG && std::cerr << "Error: Could not open current directory" << std::endl;
+        return "";
     }
 
 
@@ -117,7 +142,7 @@ void    listAllfiles(std::string path)
                     "<div class=\"file\">"
                     "<span class=\"icon\">📁</span>";
 
-                file += "<a href=\"" + path + "/" + entry->d_name + "\">" + entry->d_name + "</a>";
+                file += "<a href=\"http://" + Serv.directives["server_name"].values[0] + ":" + Serv.directives["listen"].values[0] + "/" + static_cast<std::string>(entry->d_name) + "\">" + entry->d_name + "</a>";
 
                 file += "</div>"
                 "</li>";
@@ -126,7 +151,7 @@ void    listAllfiles(std::string path)
                     "<div class=\"file\">"
                     "<span class=\"icon\">📄</span>";
 
-                file += "<a href=\"" + path + "/" + entry->d_name + "\">" + entry->d_name + "</a>";
+                file += "<a href=\"http://" + Serv.directives["server_name"].values[0] + ":" + Serv.directives["listen"].values[0] + "/" + static_cast<std::string>(entry->d_name) + "\">" + entry->d_name + "</a>";
 
                 file += "</div>"
                 "</li>";
@@ -141,10 +166,14 @@ void    listAllfiles(std::string path)
         "</body>"
         "</html>";
 
-    std::ofstream ofs("test.html");
+    // std::ofstream ofs("filelisting.html", std::ios::out | std::ios::trunc);
+    unlink("filelisting.html");
+    int fd = open("filelisting.html",  O_WRONLY | O_TRUNC | O_CREAT, 777);
 
-    ofs << file;
-    ofs.close();
+    write(fd, file.c_str(), file.size());
+
+    close(fd);
+    return ("filelisting.html");
 
 }
 
@@ -160,25 +189,22 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
     {
         root = serv.directives["root"].values[0];
 
-        path = root + requestPath;
+        path = requestPath;
 
-        // path.replace(0, it->first.size(), root);
+        path.replace(0, it->first.size(), root);
 
         int val = isDirectory(path);
         if (val == -1)
         {
             // throw 404NotFoundClass;
-            std::cout << "0\n";
-            return "";
+             throw ErrorStatus(404, NULL);
         }
         else if (val == 1)
         {
-
             if (_Method == "DELETE")
             {
                 // throw 403 Forbidden
-                std::cout << "403 Forbidden" << std::endl;
-                return "";
+                throw ErrorStatus(403, NULL);
             }
             sec_path = path;
             for (size_t i = 0; i < serv.directives["index"].values.size(); i++)
@@ -191,20 +217,20 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
             {
                 // should redirect to ...
                 std::cout << "redirect to " << serv.directives["return"].values[0] << std::endl;
+                // throw 301 Moved Permanently
+                throw ErrorStatus(301, NULL); // add Location : to response header.
             }
             else if (serv.directives.find("autoindex") != serv.directives.end()
                         &&  serv.directives["autoindex"].values[0] == "on")
             {
                 // should list all files
                 std::cout << "list all files\n";
-                listAllfiles(sec_path);
-                return "";
+                return (listAllfiles(sec_path, serv));
             }
             else
             {
                 // throw 403ForbiddenClass;
-                std::cout << "1\n";
-                return "";
+                throw ErrorStatus(403, NULL);
             }
         }
         else if (val == 0)
@@ -214,8 +240,7 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
             else
             {
                 // throw 404NotFoundClass;
-                std::cout << "2\n";
-                return "";
+                throw ErrorStatus(404, NULL);
             }
         }
 
@@ -232,8 +257,7 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
         if (val == -1)
         {
             // throw 404NotFoundClass;
-            std::cout << "3\n";
-            return "";
+            throw ErrorStatus(404, NULL);
         }
         else if (val == 1)
         {
@@ -241,8 +265,7 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
             if (_Method == "DELETE")
             {
                 // throw 403 Forbidden
-                std::cout << "403 Forbidden" << std::endl;
-                return "";
+                throw ErrorStatus(403, NULL);
             }
             sec_path = path;
             for (size_t i = 0; i < it->second.directives["index"].values.size(); i++)
@@ -255,20 +278,20 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
             {
                 // should redirect to ...
                 std::cout << "redirect to " << it->second.directives["return"].values[0] << std::endl;
+                // throw 301 Moved Permanently
+                throw ErrorStatus(301, NULL); // add Location : to response header.
             }
             else if (it->second.directives.find("autoindex") != it->second.directives.end()
                         &&  it->second.directives["autoindex"].values[0] == "on")
             {
                 // should list all files
                 std::cout << "list all files\n";
-                listAllfiles(sec_path);
-                return "";
+                return (listAllfiles(sec_path, serv));
             }
             else
             {
                 // throw 403ForbiddenClass;
-                std::cout << "4\n";
-                return "";
+                throw ErrorStatus(403, NULL);
             }
         }
         else if (val == 0)
@@ -278,8 +301,7 @@ std::string getFileFullPath(Server &serv, std::map<std::string, Location>::itera
             else
             {
                 // throw 404NotFoundClass;
-                std::cout << "5\n";
-                return "";
+                throw ErrorStatus(404, NULL);
             }
         }
 
@@ -297,14 +319,11 @@ bool    stringMaching(std::string locat , std::string &requestPath)
     return (0);
 }
 
-std::string    _GET_DELETE(Main &main)
+std::string    _GET_DELETE(Server &serv, std::string requestPath, std::string _Method)
 {
-    Server serv = main.servers[0];
-    std::string requestPath = "/";
     std::string resquestedFile = "";
     std::string line;
     std::string response = "";
-    std::string _Method = "GET";
 
     std::map<std::string, Location>::iterator it2 = serv.locations.begin();
     std::map<std::string, Location>::iterator it = serv.locations.end();
@@ -325,32 +344,41 @@ std::string    _GET_DELETE(Main &main)
     /* ======= Found the matching path ======= */
     if (it != serv.locations.end())
     {
+        if (it->second.directives.find("allow_methods") != it->second.directives.end())
+        {
+            if (find(it->second.directives["allow_methods"].values.begin(), it->second.directives["allow_methods"].values.end(), _Method) == it->second.directives["allow_methods"].values.end())
+            {
+                // throw 405 Method Not Allowed
+                std::cout << "405 method not allowed\n";
+                throw ErrorStatus(405, NULL);
+            }
+        }
+
         resquestedFile = getFileFullPath(serv, it, requestPath);
         if (resquestedFile == "")
         {
             // throw 404NotFoundClass;
-            std::cout << "404 NOt found" << std::endl;
-            return ;
+            // std::cout << "404 NOt found" << std::endl;
+            throw ErrorStatus(404, NULL);
         }
 
         /* ===== Check Read Permession ===== */
         if (access(resquestedFile.c_str(), R_OK) != 0)
         {
             // Throw 403 Forbidden
-            std::cout << "403 Forbidden" << std::endl;
-            return ;
+            throw ErrorStatus(403, NULL);
         }
     }
     else
     {
         // throw 404NotFoundClass;
-        std::cout << "404 NOt found" << std::endl;
+        throw ErrorStatus(404, NULL);
     }
 
     if (_Method == "DELETE")
     {
         // unlink(resquestedFile.c_str());
-        // throw 04 No Content
+        // throw 204 No Content
     }
 
     // Send the file to the Client.
