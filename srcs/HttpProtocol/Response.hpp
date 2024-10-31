@@ -52,4 +52,4 @@ class HttpResponse{
 };
 
 std::string WhatContentType(std::string uri);
-
+std::string getCodeString(int code);
