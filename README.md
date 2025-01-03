@@ -1,4 +1,4 @@
-![webServer](webServer.gif "webServer")
+![webServer](HttpServer.gif "webServer")
 
 # Build Your Own Web Server
 creating a high-performance, secure web server from scratch using C++. This server is capable of handling thousands of concurrent requests while supporting essential web functionalities such as HTTP parsing, dynamic content generation, and CGI execution.
