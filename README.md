@@ -6,11 +6,9 @@ Along the way, I learned about socket programming, TCP/IP, and implementing secu
 
 ## Features
 - HTTP Protocol Support: Handles HTTP methods like GET, POST, and DELETE.
-- Concurrent Request Handling: Efficiently manages up to 1,000 simultaneous connections using multithreading.
 - Dynamic Content with CGI: Executes external programs or scripts for dynamic content generation.
 - Static File Delivery: Serves files like HTML, CSS, and JavaScript for building static websites.
 - Custom HTTP Parser: Parses HTTP requests and generates appropriate responses while adhering to standards.
-- Environment Variables: Supports $VAR_NAME for dynamic configuration during runtime.
 - Signal Management: Gracefully handles SIGINT, SIGTERM, and other termination signals for clean shutdowns.
 - Logging: Logs requests, responses, and errors for debugging and monitoring.
 
@@ -23,4 +21,4 @@ make
 
 To run the project, use:
 
-./webserver ip:port
+./webserver [configfile]
